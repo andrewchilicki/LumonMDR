@@ -150,7 +150,7 @@ private:
                             gridNumber->badGroup->superActive = true;
                         }
                         // Mark as refined on 'LEFT CLICK'
-                        if (numberScale >= (0.5f + displaySettings.mouseScaleMultiplier) && ImGui::IsKeyDown(ImGuiKey_MouseLeft)) {
+                        if (!gridNumber->badGroup->refined && numberScale >= (0.5f + displaySettings.mouseScaleMultiplier) && ImGui::IsKeyDown(ImGuiKey_MouseLeft)) {
                             gridNumber->badGroup->refined = true;
                             bins[gridNumber->badGroup->binIdx].badGroupsRefined++;
                         }

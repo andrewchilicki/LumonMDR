@@ -41,7 +41,7 @@ public:
                 if (num->displayInfos.isVisible) {
                     visibleBadGroups.emplace(groupId);
 
-                    if (badGroup->isActive && groupId == *activeBadGroup) {
+                    if (badGroup->isActive && groupId == *activeBadGroup && !badGroup->refined) {
                         activeGroupStillVisible = true;
                     }
                 }
