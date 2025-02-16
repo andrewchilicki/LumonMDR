@@ -1,0 +1,21 @@
+LUMON OS
+Open interface: 0x1000000531
+parseElements: keyboard: 0 digitizer: 12 pointer: 0 0 scroll: 0 led: 0
+parseElements: vendor: 2
+HE2N_Key Does Not Exist, use kSMCPStatesIGPU for Internal GPU
+GPU = IGPU Initialized, Control ID 16
+Exited AGPMController::start()
+-- 0x5c30 -- 0xe000 -- 0x7e00 ****
+initWithTask
+start
+**** -- ON -> ON (thread: 0xfa040)
+Speaker has output streams: 1
+Reuse output buffer idx:1 dev:Speaker offset:13c000 size:41000
+Codec Output has output streams: 1
+Reuse output buffer idx:2 dev:Codec Output offset:184000 size:20800
+Digital Mic has output streams: 0
+Codec Input has output streams: 0
+Total output descriptors: 3
+Device:Speaker using output stream idx:1
+Registered DeviceUID:Speaker Index:1
+ActuatorDeviceUserClient::start Entered
