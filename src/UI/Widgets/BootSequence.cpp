@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include "Settings.h"
 
 #include "../UIManager.h"
 
@@ -28,6 +29,15 @@ public:
             lines.push_back(line);
         }
         file.close();
+
+        if (auto loadedSettings = loadSettings(settingsSavePath))
+        {
+            displaySettings = loadedSettings->displaySettings;
+            controlSettings = loadedSettings->controlSettings;
+            std::cout << "Successfully loaded settings from disk." << std::endl;
+        }
+
+        folder_name = displaySettings.headerText.c_str();
     }
 
     BootSequence::BootState getState() const override
@@ -239,6 +249,10 @@ private:
     ImVec2 logoSize;
 
     ImFont *font = nullptr;
+
+    std::string settingsSavePath = "./settings.json";
+    DisplaySettings displaySettings;
+    ControlSettings controlSettings;
 
     BootSequence::BootState state = BootSequence::BootState::Text;
 };
