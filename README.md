@@ -67,6 +67,42 @@ Feel free to email comments, suggestions, or inquiries directly to andrewchilx@g
 - An *'idle mode'* can be enabled to display the Lumon logo screensaver.
 - The user can navigate the full grid using arrow and zoom keys.
 
+## Install
+```
+# Clone Repository
+git clone https://github.com/andrewchilicki/LumonMDR
+
+# Install CMake
+sudo apt install g++ cmake
+
+# Create build directory and navigate to it
+cd LumonMDR && \
+   mkdir build && cd build
+
+# Generate build files and compile
+cmake .. && make
+
+# Copy LumonMDR and navigate back
+cp LumonMDR .. && cd ..
+```
+> [!NOTE]  
+> See below, ff using a headless Pi with Raspbian LiteOS, you may require additional dependecies.
+
+<details closed>
+<summary>Installation Instructions (Debia/Ubuntu)</summary>
+
+To install the required dependencies, run the following:
+
+```bash
+sudo apt-get install libglfw3-dev libglew-dev libxinerama-dev libxxf86vm-dev libxcursor-dev
+```
+
+Additionally, set the DISPLAY variable
+```bash
+export DISPLAY=:0
+```
+</details>
+
 ---
 ---
 
