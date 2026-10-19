@@ -4,10 +4,28 @@
 #include "backends/imgui_impl_glfw.h"
 #include <GLFW/glfw3.h>
 #include <imgui_impl_opengl3.h>
+#include <cstring>
+#include <cstdlib>
 #include <iostream>
 
 void glfw_error_callback(int error, const char* description) {
     std::cerr << "GLFW Error (" << error << "): " << description << std::endl;
+}
+
+// Picks the monitor to use for --full-screen. monitorNumber is 1-indexed as
+// shown to the user (--monitor=2 means the second monitor); falls back to the
+// primary monitor if the index is out of range.
+GLFWmonitor* pickMonitor(int monitorNumber) {
+    int monitorCount = 0;
+    GLFWmonitor** monitors = glfwGetMonitors(&monitorCount);
+
+    if (monitorNumber >= 1 && monitorNumber <= monitorCount) {
+        return monitors[monitorNumber - 1];
+    }
+
+    std::cerr << "Monitor " << monitorNumber << " not found (" << monitorCount
+               << " monitor(s) detected); using primary monitor." << std::endl;
+    return glfwGetPrimaryMonitor();
 }
 
 int main(int argc, char** argv) {
@@ -21,19 +39,21 @@ int main(int argc, char** argv) {
     }
 
     bool fullscreen = false;
+    int monitorNumber = 1;
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--full-screen") == 0) {
             fullscreen = true;
-            break;
+        } else if (strncmp(argv[i], "--monitor=", 10) == 0) {
+            monitorNumber = atoi(argv[i] + 10);
         }
     }
 
     GLFWwindow* window;
     if (fullscreen)
     {
-        GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
-        const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
-        window = glfwCreateWindow(mode->width, mode->height, "MDR Severance", primaryMonitor, nullptr);
+        GLFWmonitor* targetMonitor = pickMonitor(monitorNumber);
+        const GLFWvidmode* mode = glfwGetVideoMode(targetMonitor);
+        window = glfwCreateWindow(mode->width, mode->height, "MDR Severance", targetMonitor, nullptr);
     } else
     {
         window = glfwCreateWindow(1920, 1080, "MDR Severance", nullptr, nullptr);

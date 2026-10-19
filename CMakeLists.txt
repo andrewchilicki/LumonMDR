@@ -37,6 +37,9 @@ find_package(OpenGL REQUIRED)
 # GLFW
 find_package(glfw3 REQUIRED)
 
+# GLEW
+find_package(GLEW REQUIRED)
+
 # ImGui
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/external/imgui)
 
@@ -58,9 +61,11 @@ target_include_directories(ImGui PUBLIC
 target_link_libraries(ImGui PUBLIC glfw OpenGL::GL)
 
 # libdl
-find_library(DL_LIBRARY NAMES dl)
-if(NOT DL_LIBRARY)
-    message(FATAL_ERROR "libdl not found.")
+if(UNIX)
+    find_library(DL_LIBRARY NAMES dl)
+    if(NOT DL_LIBRARY)
+        message(FATAL_ERROR "libdl not found.")
+    endif()
 endif()
 
 # Nlohmann
@@ -91,11 +96,16 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         ImGui
         Image
         Numbers
-        ${DL_LIBRARY}
-        X11
-        Xrandr
-        Xinerama
-        Xxf86vm
-        Xcursor
         nlohmann_json
 )
+
+if(UNIX)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+            ${DL_LIBRARY}
+            X11
+            Xrandr
+            Xinerama
+            Xxf86vm
+            Xcursor
+    )
+endif()

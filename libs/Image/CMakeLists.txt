@@ -12,4 +12,5 @@ target_link_libraries(Image PUBLIC
         ImGui
         OpenGL::GL
         glfw
+        GLEW::GLEW
 )
