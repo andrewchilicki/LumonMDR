@@ -79,7 +79,7 @@ struct DisplaySettings
     float noiseScale = 1.f;
     float noiseScaleOffset = 15;
 
-    float refinedToBinSpeed = 3.0f;
+    float refinedToBinSpeed = 12.0f;
 
     std::string headerText = "@andrewchilicki";
 
@@ -101,8 +101,8 @@ struct DisplaySettings
 
 struct ControlSettings
 {
-    float arrowSensitivity = 25.f;
-    float zoomSensitivity = 0.1f;
+    float arrowSensitivity = 25.f; // Unused since arrow keys scroll by whole rows; kept so existing settings files still load
+    float zoomSensitivity = 0.1f; // Unused since zoom moves in multiplicative steps; kept so existing settings files still load
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(ControlSettings, arrowSensitivity, zoomSensitivity);
 };

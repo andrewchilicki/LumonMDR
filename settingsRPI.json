@@ -15,6 +15,6 @@
         "noiseScale": 1.0,
         "noiseScaleOffset": 10.0,
         "noiseSpeed": 0.0020000000949949026,
-        "refinedToBinSpeed": 2.0
+        "refinedToBinSpeed": 8.0
     }
 }

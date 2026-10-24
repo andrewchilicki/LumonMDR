@@ -4,6 +4,13 @@
 
 class ImageDisplay;
 
+enum class FileCompletion
+{
+    InProgress,
+    JustCompleted,  // Finished during this visit to the file
+    AlreadyComplete // Was already finished when opened
+};
+
 class NumbersPanel {
 public:
     virtual void init() = 0;
@@ -17,6 +24,8 @@ public:
     // Switches to that file's grid and progress (creating it on first open) and shows its
     // name in the header in place of the saved header text
     virtual void openFile(const std::string& fileName) = 0;
+
+    virtual FileCompletion getFileCompletion() const = 0;
 
     virtual ~NumbersPanel() = default;
 };

@@ -13,7 +13,14 @@ struct BadGroup
     bool isActive = false;
     bool superActive = false;
     double scale = 0;
-    bool reachedMax = false;
+    bool reachedMax = false; // Done holding at full size and shrinking away
+    float holdTime = 0.f;
+
+    float cursorProximity = 0.f; // 0 (cursor far away) to 1 (cursor on the group), smoothed over time
+    float agitation = 0.f;       // 0 to 1: how hard the numbers shake, rising while hovered and settling after
+
+    bool highlighted = false;    // One of the last few unrefined groups: stays active and is pointed out when off screen
+    float hintAlpha = 0.f;       // Fade level of the off-screen arrow pointing at it
 
     int binIdx = 0;
     bool refined = false;
@@ -29,6 +36,13 @@ struct NumberDisplayInfos
     float centerX = -1.f, centerY = -1.f;
     float refinedX = -1.f, refinedY = -1.f;
     bool isVisible = false;
+
+    // Set each update and applied when drawing: drift/jitter offset from center, and cursor-proximity scale
+    float offsetX = 0.f, offsetY = 0.f;
+    float hoverScale = 1.f;
+
+    // Fades the number out as it nears the edge of the grid area, so scrolling doesn't pop numbers in and out
+    float edgeAlpha = 1.f;
 };
 
 struct Number

@@ -2,6 +2,7 @@
 
 #include "Image/ImageDisplay.h"
 #include "Widgets/BootScreen.h"
+#include "Widgets/FileCompleteScreen.h"
 #include "Widgets/FileSelectScreen.h"
 #include "Widgets/IdleScreen.h"
 #include "Widgets/NumbersPanel.h"
@@ -26,6 +27,7 @@ public:
         idleScreen = createIdleScreen(imageDisplay);
         bootScreen = createBootScreen(imageDisplay);
         fileSelectScreen = createFileSelectScreen();
+        fileCompleteScreen = createFileCompleteScreen();
     }
 
     void init() final {
@@ -39,6 +41,7 @@ public:
         ImGui_ImplOpenGL3_Init("#version 130");
 
         numbersPanel->init();
+        fileCompleteScreen->init(); // After the panel, whose font must be added first to stay the default
     }
 
     void update() final
@@ -52,14 +55,27 @@ public:
             fileSelectScreen->update();
             if (fileSelectScreen->isComplete()) {
                 numbersPanel->openFile(fileSelectScreen->getSelectedFile());
+                // Checked straight away so an already-complete file never flashes its grid
+                checkFileComplete();
             }
             return;
         }
 
-        // Return to the file picker with 'ESCAPE'; each file keeps its progress
+        // Return to the file picker via the logo animation with 'ESCAPE'; each file keeps its progress
         if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             idleMode = false;
+            showingFileComplete = false;
+            bootScreen->replayLogo();
             fileSelectScreen->reset();
+            return;
+        }
+
+        checkFileComplete();
+        if (showingFileComplete) {
+            fileCompleteScreen->update();
+            if (fileCompleteScreen->showsGridBehind()) {
+                numbersPanel->update();
+            }
             return;
         }
 
@@ -103,6 +119,11 @@ public:
                 bootScreen->drawBootScreen();
             } else if (!fileSelectScreen->isComplete()) {
                 fileSelectScreen->drawFileSelectScreen();
+            } else if (showingFileComplete) {
+                if (fileCompleteScreen->showsGridBehind()) {
+                    numbersPanel->drawNumbersPanel();
+                }
+                fileCompleteScreen->drawFileCompleteScreen();
             } else if (idleMode) {
                 idleScreen->drawIdleScreen();
             } else {
@@ -111,7 +132,7 @@ public:
         }
         ImGui::End();
 
-        if (settingsMode && fileSelectScreen->isComplete()) {
+        if (settingsMode && fileSelectScreen->isComplete() && !showingFileComplete) {
             ImGui::SetNextWindowPos(viewportPos);
             ImGui::SetNextWindowSize(ImVec2(viewportSize.x * settingsWidthRatio, viewportSize.y));
             if (ImGui::Begin("Settings")) {
@@ -129,14 +150,28 @@ public:
     }
 
 private:
+    // Swaps the grid for the completion screen once the open file is (or was already) complete
+    void checkFileComplete()
+    {
+        FileCompletion completion = numbersPanel->getFileCompletion();
+        if (showingFileComplete || completion == FileCompletion::InProgress) {
+            return;
+        }
+        showingFileComplete = true;
+        idleMode = false;
+        fileCompleteScreen->show(completion == FileCompletion::JustCompleted ? FileCompleteScreen::Kind::FirstCompletion : FileCompleteScreen::Kind::AlreadyComplete);
+    }
+
     std::shared_ptr<ImageDisplay> imageDisplay;
     std::shared_ptr<NumbersPanel> numbersPanel;
     std::shared_ptr<IdleScreen> idleScreen;
     std::shared_ptr<BootScreen> bootScreen;
     std::shared_ptr<FileSelectScreen> fileSelectScreen;
+    std::shared_ptr<FileCompleteScreen> fileCompleteScreen;
 
     bool settingsMode = false;
     bool idleMode = false;
+    bool showingFileComplete = false;
 };
 
 std::shared_ptr<UIManager> createUIManager()

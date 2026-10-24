@@ -88,6 +88,9 @@ add_executable(${PROJECT_NAME} src/main.cpp
         src/UI/Widgets/FileSelectScreen.cpp
         src/UI/Widgets/FileSelectScreen.h
         src/UI/Widgets/Files.h
+        src/UI/Widgets/Bin.h
+        src/UI/Widgets/FileCompleteScreen.cpp
+        src/UI/Widgets/FileCompleteScreen.h
         src/UI/Widgets/Settings.h)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
