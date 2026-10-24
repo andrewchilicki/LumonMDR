@@ -83,6 +83,8 @@ add_executable(${PROJECT_NAME} src/main.cpp
         src/UI/Widgets/NumbersPanel.h
         src/UI/Widgets/IdleScreen.cpp
         src/UI/Widgets/IdleScreen.h
+        src/UI/Widgets/BootScreen.cpp
+        src/UI/Widgets/BootScreen.h
         src/UI/Widgets/Settings.h)
 
 target_include_directories(${PROJECT_NAME} PRIVATE

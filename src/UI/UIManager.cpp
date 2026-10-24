@@ -1,6 +1,7 @@
 #include "UIManager.h"
 
 #include "Image/ImageDisplay.h"
+#include "Widgets/BootScreen.h"
 #include "Widgets/IdleScreen.h"
 #include "Widgets/NumbersPanel.h"
 
@@ -22,6 +23,7 @@ public:
         imageDisplay = createImageDisplay("./assets/");
         numbersPanel = createNumbersPanel(imageDisplay);
         idleScreen = createIdleScreen(imageDisplay);
+        bootScreen = createBootScreen(imageDisplay);
     }
 
     void init() final {
@@ -39,6 +41,11 @@ public:
 
     void update() final
     {
+        if (!bootScreen->isComplete()) {
+            bootScreen->update();
+            return;
+        }
+
         // Toggle settings mode with 'TAB'
         if (ImGui::IsKeyPressed(ImGuiKey_Tab)) {
             settingsMode = !settingsMode;
@@ -75,7 +82,9 @@ public:
         ImGui::SetNextWindowSize(ImVec2(viewportSize.x, viewportSize.y));
         if (ImGui::Begin("Main", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
         {
-            if (idleMode) {
+            if (!bootScreen->isComplete()) {
+                bootScreen->drawBootScreen();
+            } else if (idleMode) {
                 idleScreen->drawIdleScreen();
             } else {
                 numbersPanel->drawNumbersPanel();
@@ -83,7 +92,7 @@ public:
         }
         ImGui::End();
 
-        if (settingsMode) {
+        if (settingsMode && bootScreen->isComplete()) {
             ImGui::SetNextWindowPos(viewportPos);
             ImGui::SetNextWindowSize(ImVec2(viewportSize.x * settingsWidthRatio, viewportSize.y));
             if (ImGui::Begin("Settings")) {
@@ -104,6 +113,7 @@ private:
     std::shared_ptr<ImageDisplay> imageDisplay;
     std::shared_ptr<NumbersPanel> numbersPanel;
     std::shared_ptr<IdleScreen> idleScreen;
+    std::shared_ptr<BootScreen> bootScreen;
 
     bool settingsMode = false;
     bool idleMode = false;
