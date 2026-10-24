@@ -2,6 +2,7 @@
 
 #include "Image/ImageDisplay.h"
 #include "Widgets/BootScreen.h"
+#include "Widgets/FileSelectScreen.h"
 #include "Widgets/IdleScreen.h"
 #include "Widgets/NumbersPanel.h"
 
@@ -24,6 +25,7 @@ public:
         numbersPanel = createNumbersPanel(imageDisplay);
         idleScreen = createIdleScreen(imageDisplay);
         bootScreen = createBootScreen(imageDisplay);
+        fileSelectScreen = createFileSelectScreen();
     }
 
     void init() final {
@@ -43,6 +45,21 @@ public:
     {
         if (!bootScreen->isComplete()) {
             bootScreen->update();
+            return;
+        }
+
+        if (!fileSelectScreen->isComplete()) {
+            fileSelectScreen->update();
+            if (fileSelectScreen->isComplete()) {
+                numbersPanel->openFile(fileSelectScreen->getSelectedFile());
+            }
+            return;
+        }
+
+        // Return to the file picker with 'ESCAPE'; each file keeps its progress
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            idleMode = false;
+            fileSelectScreen->reset();
             return;
         }
 
@@ -84,6 +101,8 @@ public:
         {
             if (!bootScreen->isComplete()) {
                 bootScreen->drawBootScreen();
+            } else if (!fileSelectScreen->isComplete()) {
+                fileSelectScreen->drawFileSelectScreen();
             } else if (idleMode) {
                 idleScreen->drawIdleScreen();
             } else {
@@ -92,7 +111,7 @@ public:
         }
         ImGui::End();
 
-        if (settingsMode && bootScreen->isComplete()) {
+        if (settingsMode && fileSelectScreen->isComplete()) {
             ImGui::SetNextWindowPos(viewportPos);
             ImGui::SetNextWindowSize(ImVec2(viewportSize.x * settingsWidthRatio, viewportSize.y));
             if (ImGui::Begin("Settings")) {
@@ -114,6 +133,7 @@ private:
     std::shared_ptr<NumbersPanel> numbersPanel;
     std::shared_ptr<IdleScreen> idleScreen;
     std::shared_ptr<BootScreen> bootScreen;
+    std::shared_ptr<FileSelectScreen> fileSelectScreen;
 
     bool settingsMode = false;
     bool idleMode = false;

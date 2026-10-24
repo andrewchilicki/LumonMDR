@@ -21,4 +21,5 @@ public:
     virtual ~NumberGrid() = default;
 };
 
-std::shared_ptr<NumberGrid> createNumberGrid(int gridSize);
+// `seed` drives which numbers are bad, so different seeds give different bad-group layouts
+std::shared_ptr<NumberGrid> createNumberGrid(int gridSize, unsigned int seed = 505);

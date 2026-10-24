@@ -43,6 +43,8 @@ struct Number
     BadGroupPtr badGroup = nullptr;
 
     float regenerateScale = 0.f;
+    float regenerateDelay = 0.f;
+    float regenerateDuration = 1.f;
 };
 
 using NumberPtr = std::shared_ptr<Number>;

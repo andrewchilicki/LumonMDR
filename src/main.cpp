@@ -71,14 +71,10 @@ int main(int argc, char** argv) {
 
     std::shared_ptr<UIManager> uiManager = createUIManager();
     uiManager->init();
+    // Escape is handled by the UI (back to the file picker); quit with Alt+F4 or Ctrl+C in the launching terminal
     while (!glfwWindowShouldClose(window)) {
         // Poll events
         glfwPollEvents();
-
-        // Close application with 'ESCAPE' key
-        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-            glfwSetWindowShouldClose(window, true);
-        }
 
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

@@ -10,7 +10,7 @@
 
 class NumberGridImpl : public NumberGrid {
 public:
-    explicit NumberGridImpl(int gridSize)
+    NumberGridImpl(int gridSize, unsigned int seed) : perlinBadNumbers(seed)
     {
         generateGrid(gridSize);
     }
@@ -134,7 +134,7 @@ private:
     std::optional<int> activeBadGroup = std::nullopt;
     int newBadGroupCountdown = 500;
 
-    siv::PerlinNoise perlinBadNumbers{ 505 };
+    siv::PerlinNoise perlinBadNumbers;
     float badScale = 0.4f;
     float badThresh = 0.7f;
     bool newBad = false;
@@ -208,7 +208,7 @@ private:
 
 };
 
-std::shared_ptr<NumberGrid> createNumberGrid(int gridSize)
+std::shared_ptr<NumberGrid> createNumberGrid(int gridSize, unsigned int seed)
 {
-    return std::make_shared<NumberGridImpl>(gridSize);
+    return std::make_shared<NumberGridImpl>(gridSize, seed);
 }

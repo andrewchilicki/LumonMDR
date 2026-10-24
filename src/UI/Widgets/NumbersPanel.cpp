@@ -1,11 +1,15 @@
 #include "NumbersPanel.h"
 
 #include "Numbers/NumberGrid.h"
+#include "Files.h"
 #include "ImageDisplay.h"
 #include "Settings.h"
 #include "../UIManager.h"
 
+#include <algorithm>
+#include <cfloat>
 #include <cmath>
+#include <map>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <iostream>
@@ -14,18 +18,27 @@
 #include <json.hpp>
 #include "PerlinNoise.hpp"
 
+namespace
+{
+    // Per-number fade-in: each number waits a random delay, then fades/grows in over a random duration
+    constexpr float kFadeInMaxDelay = 3.f;
+    constexpr float kFadeInMinDuration = 1.5f;
+    constexpr float kFadeInMaxDuration = 3.5f;
+
+    constexpr float kHeaderTextPadding = 25.f;
+
+    // Seed for the grid shown before any file is opened; each file in kFiles offsets from it
+    constexpr unsigned int kDefaultGridSeed = 505;
+}
+
 class NumbersPanelImpl : public NumbersPanel
 {
+    struct FileProgress;
+
 public:
     explicit NumbersPanelImpl(std::shared_ptr<ImageDisplay> imageDisplay) : imageDisplay(std::move(imageDisplay))
     {
-        numberGrid = createNumberGrid(gridSize);
-
-        // Update max bad groups for each bin
-        auto badGroups = numberGrid->getBadGroups();
-        for (auto &[id, group] : badGroups) {
-            bins[group->binIdx].maxBadGroups++;
-        }
+        openFile("");
 
         // Load settings
         if (auto loadedSettings = loadSettings(settingsSavePath)) {
@@ -49,7 +62,7 @@ public:
 
     void update() final
     {
-        numberGrid->update();
+        activeFile->numberGrid->update();
     }
 
     void drawNumbersPanel() final
@@ -69,7 +82,8 @@ public:
         drawGraphicOverlays(windowPos, windowSize, draw_list);
 
         // Draw Grid
-        auto numberRefiningToBin = drawNumbersGrid(windowPos, windowSize, mousePos, viewportChanged || displaySizeChanged);
+        auto numberRefiningToBin = drawNumbersGrid(windowPos, windowSize, mousePos, viewportChanged || displaySizeChanged || fileChanged);
+        fileChanged = false;
 
         // Draw Bins
         drawBins(windowPos, windowSize, draw_list, numberRefiningToBin);
@@ -78,19 +92,106 @@ public:
 
     void triggerLoadAnimation() final
     {
-        // Reset 'regenerate scale' on all numbers
-        for (auto &[x, gridY] : numberGrid->getGrid()) {
+        // Restart the fade-in on all numbers, staggered so they don't all appear at once
+        for (auto &[x, gridY] : activeFile->numberGrid->getGrid()) {
             for (auto &[y, gridNumber] : gridY) {
-                gridNumber->regenerateScale = 0.f;
+                startFadeIn(*gridNumber, kFadeInMaxDelay);
             }
         }
     }
 
+    void openFile(const std::string& fileName_) final
+    {
+        fileName = fileName_;
+
+        auto [it, isNew] = files.try_emplace(fileName);
+        activeFile = &it->second;
+        if (isNew) {
+            createFileProgress(*activeFile, fileName);
+        }
+
+        // Cached number positions belong to whatever viewport this file was last drawn with
+        fileChanged = true;
+        triggerLoadAnimation();
+    }
+
 private:
+    void createFileProgress(FileProgress& progress, const std::string& name)
+    {
+        unsigned int seed = kDefaultGridSeed;
+        int presetPercent = 0;
+        for (size_t i = 0; i < kFiles.size(); i++) {
+            if (kFiles[i].name == name) {
+                seed = kDefaultGridSeed + static_cast<unsigned int>(i) + 1;
+                presetPercent = kFiles[i].presetPercent;
+            }
+        }
+
+        progress.numberGrid = createNumberGrid(gridSize, seed);
+
+        // Update max bad groups for each bin
+        for (auto &[id, group] : progress.numberGrid->getBadGroups()) {
+            progress.bins[group->binIdx].maxBadGroups++;
+        }
+
+        applyPresetCompletion(progress, std::clamp(presetPercent, 0, 100));
+    }
+
+    // Instantly refines enough random bad groups to reach `percent` overall (rounded up), always
+    // taking from whichever bin is proportionally least full so the bins stay roughly even
+    void applyPresetCompletion(FileProgress& progress, int percent)
+    {
+        std::array<std::vector<BadGroupPtr>, 5> unrefined;
+        int total = 0;
+        for (auto &[id, group] : progress.numberGrid->getBadGroups()) {
+            unrefined[group->binIdx].push_back(group);
+            total++;
+        }
+        for (auto &groups : unrefined) {
+            std::shuffle(groups.begin(), groups.end(), rng);
+        }
+
+        auto &bins = progress.bins;
+        int target = (total * percent + 99) / 100;
+        for (int n = 0; n < target; n++) {
+            int best = -1;
+            for (int b = 0; b < static_cast<int>(bins.size()); b++) {
+                if (unrefined[b].empty()) {
+                    continue;
+                }
+                // refined[b] / max[b] < refined[best] / max[best], cross-multiplied
+                if (best < 0 || bins[b].badGroupsRefined * bins[best].maxBadGroups < bins[best].badGroupsRefined * bins[b].maxBadGroups) {
+                    best = b;
+                }
+            }
+            if (best < 0) {
+                break;
+            }
+
+            BadGroupPtr group = unrefined[best].back();
+            unrefined[best].pop_back();
+
+            // Detach its numbers so they become ordinary; the grid drops the emptied group on its next update
+            for (int numberId : group->numberIds) {
+                progress.numberGrid->getGridNumber(numberId)->badGroup.reset();
+            }
+            group->numberIds.clear();
+            group->refined = true;
+            bins[best].badGroupsRefined++;
+        }
+    }
+
+    void startFadeIn(Number& number, float maxDelay)
+    {
+        number.regenerateScale = 0.f;
+        number.regenerateDelay = std::uniform_real_distribution<float>(0.f, maxDelay)(rng);
+        number.regenerateDuration = std::uniform_real_distribution<float>(kFadeInMinDuration, kFadeInMaxDuration)(rng);
+    }
+
     std::optional<int> drawNumbersGrid(const ImVec2& windowPos, const ImVec2& windowSize, const ImVec2& mousePos, bool updateDisplayInfos)
     {
         std::optional<int> refiningToBin = std::nullopt;
-        for (auto &[x, gridY] : numberGrid->getGrid()) {
+        for (auto &[x, gridY] : activeFile->numberGrid->getGrid()) {
             for (auto &[y, gridNumber] : gridY) {
 
                 std::string numberToDraw = "numbers/" + std::to_string(gridNumber->num) + ".png";
@@ -117,12 +218,16 @@ private:
 
                 auto centerPos = ImVec2(gridNumber->displayInfos.centerX, gridNumber->displayInfos.centerY);
 
-                // Animate number on screen
-                float numberAlpha = 255;
+                // Animate number on screen: wait out its delay, then fade/grow in over its duration
                 if (gridNumber->regenerateScale < 1.f) {
-                    gridNumber->regenerateScale += numberGrid->randomNumber(0,10)*0.001f;
-                    numberAlpha = static_cast<int>(std::clamp(gridNumber->regenerateScale*2.f*255.f, 0.f, 255.f));
+                    float dt = ImGui::GetIO().DeltaTime;
+                    if (gridNumber->regenerateDelay > 0.f) {
+                        gridNumber->regenerateDelay -= dt;
+                    } else {
+                        gridNumber->regenerateScale = std::min(1.f, gridNumber->regenerateScale + dt / gridNumber->regenerateDuration);
+                    }
                 }
+                float numberAlpha = gridNumber->regenerateScale;
 
                 // Offset from noise scale
                 double noiseScale = perlin.noise3D((x * displaySettings.noiseScale), (y * displaySettings.noiseScale), t*displaySettings.noiseSpeed);
@@ -152,14 +257,14 @@ private:
                         // Mark as refined on 'LEFT CLICK'
                         if (!gridNumber->badGroup->refined && numberScale >= (0.5f + displaySettings.mouseScaleMultiplier) && ImGui::IsKeyDown(ImGuiKey_MouseLeft)) {
                             gridNumber->badGroup->refined = true;
-                            bins[gridNumber->badGroup->binIdx].badGroupsRefined++;
+                            activeFile->bins[gridNumber->badGroup->binIdx].badGroupsRefined++;
                         }
                     }
 
                     // Add jitter to 'super active' bad numbers
                     if (gridNumber->badGroup->superActive) {
-                        centerPos.x += numberGrid->randomNumber(-10, 10)*badScale;
-                        centerPos.y += numberGrid->randomNumber(-10, 10)*badScale;
+                        centerPos.x += activeFile->numberGrid->randomNumber(-10, 10)*badScale;
+                        centerPos.y += activeFile->numberGrid->randomNumber(-10, 10)*badScale;
                     }
 
                     // Animate position if number has been refined
@@ -178,8 +283,8 @@ private:
                             binIdx = 4;
                         }
 
-                        float distX = bins[binIdx].pos.x - gridNumber->displayInfos.refinedX;
-                        float distY = bins[binIdx].pos.y - gridNumber->displayInfos.refinedY;
+                        float distX = activeFile->bins[binIdx].pos.x - gridNumber->displayInfos.refinedX;
+                        float distY = activeFile->bins[binIdx].pos.y - gridNumber->displayInfos.refinedY;
                         float distance = sqrt(distX * distX + distY * distY);
 
                         if (distance > displaySettings.refinedToBinSpeed) {
@@ -192,8 +297,8 @@ private:
                             refiningToBin = gridNumber->badGroup->binIdx;
                         } else {
                             gridNumber->badGroup.reset(); // No longer a bad number
-                            gridNumber->num = numberGrid->randomNumber(0,9);
-                            gridNumber->regenerateScale = 0.f;
+                            gridNumber->num = activeFile->numberGrid->randomNumber(0,9);
+                            startFadeIn(*gridNumber, 0.f);
                         }
                     }
                 }
@@ -213,7 +318,7 @@ private:
     {
         std::string binPercentPath = "bins/bin-percent.png";
         auto [widthP, heightP] = imageDisplay->getImageSize(binPercentPath);
-        for (auto &b : bins) {
+        for (auto &b : activeFile->bins) {
             // Scale based on viewport size
             auto pos = b.updatePos(windowSize, windowPos, displayPresets.numberWindowBufferBottom - displayPresets.binOffset);
 
@@ -254,12 +359,20 @@ private:
         ImVec2 headerBoxMin = ImVec2(windowPos.x + displayPresets.headerBoxBufferX, windowPos.y + displayPresets.headerBoxBufferY);
         ImVec2 headerBoxMax = ImVec2(windowPos.x + windowSize.x - displayPresets.headerBoxBufferX - displayPresets.headerImageOffsetX, windowPos.y + displayPresets.numberWindowBufferTop - displayPresets.lineGraphicsSpacing - displayPresets.headerBoxBufferY);
         drawList->AddRect(headerBoxMin, headerBoxMax, ColorValues::lumonBlue);
-        ImVec2 headerTextPos = ImVec2(headerBoxMin.x + 25.f, (headerBoxMin.y+headerBoxMax.y)/2.f - displayPresets.fontSize/2.f);
-        drawList->AddText(font, displayPresets.fontSize, headerTextPos, ColorValues::lumonBlue, displaySettings.headerText.c_str());
+        float headerTextY = (headerBoxMin.y+headerBoxMax.y)/2.f - displayPresets.fontSize/2.f;
+        const std::string& headerText = fileName.empty() ? displaySettings.headerText : fileName;
+        drawList->AddText(font, displayPresets.fontSize, ImVec2(headerBoxMin.x + kHeaderTextPadding, headerTextY), ColorValues::lumonBlue, headerText.c_str());
 
-        // Lumon logo
         std::string logoPath = "lumon-logo.png";
         auto [widthH, heightH] = imageDisplay->getImageSize(logoPath);
+
+        // Overall completion, right-aligned against the logo (which straddles the box's right edge)
+        std::string completeText = std::to_string(getCompletionPercent()) + "% Complete";
+        float completeTextWidth = font->CalcTextSizeA(displayPresets.fontSize, FLT_MAX, 0.f, completeText.c_str()).x;
+        float completeTextX = headerBoxMax.x - (widthH*displayPresets.headerImageScale)/2.f - kHeaderTextPadding - completeTextWidth;
+        drawList->AddText(font, displayPresets.fontSize, ImVec2(completeTextX, headerTextY), ColorValues::lumonBlue, completeText.c_str());
+
+        // Lumon logo
         ImGui::SetCursorPos(ImVec2(headerBoxMax.x - (widthH*displayPresets.headerImageScale)/2.f, (headerBoxMax.y + headerBoxMin.y)/2.f - (heightH*displayPresets.headerImageScale)/2.f));
         imageDisplay->drawImGuiImage(logoPath, displayPresets.headerImageScale, ColorValues::lumonBlue);
 
@@ -393,6 +506,18 @@ private:
     }
 
     // Helpers
+    // Refined bad groups across all bins, rounded down so 100% only shows once everything is refined
+    int getCompletionPercent() const
+    {
+        int refined = 0;
+        int total = 0;
+        for (const auto &b : activeFile->bins) {
+            refined += b.badGroupsRefined;
+            total += b.maxBadGroups;
+        }
+        return total > 0 ? refined * 100 / total : 0;
+    }
+
     float getScaleFromCursor(const ImVec2& globalNumberPos, const ImVec2& mousePos) const
     {
         float distX = mousePos.x - globalNumberPos.x;
@@ -407,7 +532,6 @@ private:
 
     int gridSize = 100;
     std::shared_ptr<ImageDisplay> imageDisplay;
-    std::shared_ptr<NumberGrid> numberGrid;
 
     ImFont* font;
 
@@ -440,10 +564,23 @@ private:
             return pos;
         }
     };
-    std::array<Bin, 5> bins = {Bin{1}, Bin{2}, Bin{3}, Bin{4}, Bin{5}};
+
+    // Each file keeps its own grid and bin progress, created the first time it's opened
+    struct FileProgress
+    {
+        std::shared_ptr<NumberGrid> numberGrid;
+        std::array<Bin, 5> bins = {Bin{1}, Bin{2}, Bin{3}, Bin{4}, Bin{5}};
+    };
+    std::map<std::string, FileProgress> files;
+    FileProgress* activeFile = nullptr;
+    bool fileChanged = false;
 
     ImVec2 lastViewportSize = ImVec2(1280, 720);
     float lastGlobalScale = 1.f;
+
+    std::string fileName;
+
+    std::mt19937 rng{std::random_device{}()};
 };
 
 std::shared_ptr<NumbersPanel> createNumbersPanel(const std::shared_ptr<ImageDisplay>& imageDisplay)
