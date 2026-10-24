@@ -23,6 +23,10 @@ public:
     // and drawn underneath it
     virtual bool showsGridBehind() const = 0;
 
+    // True once the completion animation has played out and the app should go back to the file
+    // picker
+    virtual bool isFinished() const = 0;
+
     virtual ~FileCompleteScreen() = default;
 };
 

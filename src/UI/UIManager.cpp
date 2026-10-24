@@ -61,8 +61,9 @@ public:
             return;
         }
 
-        // Return to the file picker via the logo animation with 'ESCAPE'; each file keeps its progress
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        // Return to the file picker via the logo animation with 'ESCAPE', or once the completion
+        // animation has played out; each file keeps its progress
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape) || (showingFileComplete && fileCompleteScreen->isFinished())) {
             idleMode = false;
             showingFileComplete = false;
             bootScreen->replayLogo();

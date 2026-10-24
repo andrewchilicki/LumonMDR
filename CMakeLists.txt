@@ -92,6 +92,8 @@ add_executable(${PROJECT_NAME} src/main.cpp
         src/UI/Widgets/Bin.h
         src/UI/Widgets/FileCompleteScreen.cpp
         src/UI/Widgets/FileCompleteScreen.h
+        src/UI/Widgets/TendrilReveal.cpp
+        src/UI/Widgets/TendrilReveal.h
         src/UI/Widgets/Settings.h)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -107,6 +109,16 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         Numbers
         nlohmann_json
 )
+
+if(WIN32 AND MINGW)
+    # Put the MinGW DLLs the exe needs (GLFW, FFmpeg and their dependencies) next to it
+    get_filename_component(MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -DEXE=$<TARGET_FILE:${PROJECT_NAME}> -DSEARCH_DIR=${MINGW_BIN_DIR} -DOBJDUMP=${CMAKE_OBJDUMP}
+                    -P ${CMAKE_SOURCE_DIR}/tools/CopyRuntimeDlls.cmake
+            COMMENT "Copying runtime DLLs"
+    )
+endif()
 
 if(UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE
