@@ -19,7 +19,7 @@ struct PresetDisplaySettings
     float binImageScale = 0.75f;
     float binOffset = 40.f;
     float binPercentBarOffset = 50.f;
-    float fontSize = 25.f;
+    float fontSize = 29.f;
     float settingsFontScale = 0.3f;
 
     float lineGraphicsSpacing = 10.f;

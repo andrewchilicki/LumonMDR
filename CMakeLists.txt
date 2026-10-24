@@ -79,6 +79,7 @@ add_subdirectory(libs)
 add_executable(${PROJECT_NAME} src/main.cpp
         src/UI/UIManager.cpp
         src/UI/UIManager.h
+        src/UI/Fonts.h
         src/UI/Widgets/NumbersPanel.cpp
         src/UI/Widgets/NumbersPanel.h
         src/UI/Widgets/IdleScreen.cpp

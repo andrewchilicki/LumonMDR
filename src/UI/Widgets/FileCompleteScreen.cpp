@@ -1,5 +1,6 @@
 #include "FileCompleteScreen.h"
 
+#include "../Fonts.h"
 #include "../UIManager.h"
 
 #include <algorithm>
@@ -56,10 +57,7 @@ class FileCompleteScreenImpl : public FileCompleteScreen
 public:
     void init() final
     {
-        popupFont = ImGui::GetIO().Fonts->AddFontFromFileTTF("./assets/Montserrat-Bold.ttf", kPopupFontSize);
-        if (popupFont == nullptr) {
-            std::cerr << "Failed to load the completion popup font; using the default font." << std::endl;
-        }
+        popupFont = Fonts::loadUiFont(kPopupFontSize);
     }
 
     void show(Kind kind_) final

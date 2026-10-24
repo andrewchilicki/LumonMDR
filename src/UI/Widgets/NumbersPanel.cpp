@@ -5,6 +5,7 @@
 #include "Files.h"
 #include "ImageDisplay.h"
 #include "Settings.h"
+#include "../Fonts.h"
 #include "../UIManager.h"
 
 #include <algorithm>
@@ -150,13 +151,12 @@ public:
 
     void init() final
     {
-        // Load custom font
+        // Load custom font; added first, so it's the default font everywhere
         ImGuiIO& io = ImGui::GetIO();
-        font = io.Fonts->AddFontFromFileTTF("./assets/Montserrat-Bold.ttf", 50.f);
+        font = Fonts::loadUiFont(Fonts::kUiFontSize);
         io.Fonts->Build();
         if (font == nullptr) {
             font = ImGui::GetDefaultFont();
-            std::cerr << "Failed to load 'Montserrat-Bold' font." << std::endl;
         }
     }
 
