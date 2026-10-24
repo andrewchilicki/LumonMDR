@@ -34,7 +34,12 @@ struct NumberDisplayInfos
 
     bool horizontalOffset;
     float centerX = -1.f, centerY = -1.f;
+    // Flight into a bin once refined: start point (-1 while not flying), a delay so a group's numbers
+    // stream in one after another, and progress from 0 to 1 over the flight's duration
     float refinedX = -1.f, refinedY = -1.f;
+    float flightDelay = 0.f;
+    float flightProgress = 0.f;
+    float flightDuration = 1.f;
     bool isVisible = false;
 
     // Set each update and applied when drawing: drift/jitter offset from center, and cursor-proximity scale

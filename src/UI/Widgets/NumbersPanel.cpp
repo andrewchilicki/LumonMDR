@@ -106,9 +106,43 @@ namespace
         return static_cast<float>(group.scale) * (kFarSwellFraction + (1.f - kFarSwellFraction) * proximity);
     }
 
-    // After the last group is refined, how long to keep showing the grid (so its numbers can land
-    // in their bins) before the file counts as just completed
-    constexpr float kCompletionDelay = 1.5f;
+    // After the last refined number lands, how long to keep showing the grid (so the bars can
+    // finish filling) before the file counts as just completed
+    constexpr float kCompletionDelay = 0.5f;
+
+    // Refined numbers launch kFlightStagger s apart, ease toward the bin's opening (taking at least
+    // kMinFlightDuration), then shrink by kFlightShrink and fade as they drop in
+    constexpr float kFlightStagger = 0.05f;
+    constexpr float kMinFlightDuration = 0.35f;
+    constexpr float kFlightShrinkStart = 0.7f; // Fraction of the flight
+    constexpr float kFlightShrink = 0.6f;
+    constexpr float kFlightFadeStart = 0.85f;
+
+    // Bin lids: two flaps hinged at the box's top corners swing up and out by kLidOpenAngle while
+    // numbers are on their way, then close kLidCloseDelay s after the last one lands
+    constexpr float kLidOpenDuration = 0.2f;
+    constexpr float kLidCloseDuration = 0.35f;
+    constexpr float kLidCloseDelay = 0.25f;
+    constexpr float kLidOpenAngle = 2.1f;       // Radians from lying flat over the box
+    constexpr float kLidLengthFraction = 0.5f;  // Of the box's width
+    constexpr float kLidThickness = 4.f;        // Px at bin image scale 1
+
+    // Each landing number pulses the bin by kBinBumpScale, settling over kBinBumpDuration; the bar
+    // eases toward its new fill (higher kBarFillSmoothing = snappier)
+    constexpr float kBinBumpScale = 0.06f;
+    constexpr float kBinBumpDuration = 0.25f;
+    constexpr float kBarFillSmoothing = 6.f;
+
+    float smoothstep(float edge0, float edge1, float x)
+    {
+        float t = std::clamp((x - edge0) / (edge1 - edge0), 0.f, 1.f);
+        return t * t * (3.f - 2.f * t);
+    }
+
+    float easeInOutCubic(float t)
+    {
+        return t < 0.5f ? 4.f * t * t * t : 1.f - std::pow(-2.f * t + 2.f, 3.f) / 2.f;
+    }
 
     // Numbers fade out over their last kBorderFadeDistance px before the grid area's edge
     constexpr float kBorderFadeDistance = 40.f;
@@ -172,23 +206,25 @@ public:
         updateGroupCursorResponse(dt, mousePos);
         updateHintFades(dt);
 
-        if (fileCompletion == FileCompletion::InProgress && allGroupsRefined()) {
+        if (fileCompletion == FileCompletion::InProgress && allGroupsLanded()) {
             completionTimer += dt;
             if (completionTimer >= kCompletionDelay) {
                 fileCompletion = FileCompletion::JustCompleted;
             }
         }
 
-        binReceiving.reset();
         for (const auto &[x, gridY] : activeFile->numberGrid->getGrid()) {
             for (const auto &[y, gridNumber] : gridY) {
                 // Fade in off-screen numbers too, so they're already there when scrolled to
                 advanceFadeIn(*gridNumber, dt);
-                if (gridNumber->displayInfos.isVisible) {
+                // Refined numbers fly in even from off screen, so every group finishes landing
+                bool refined = gridNumber->badGroup && gridNumber->badGroup->refined;
+                if (gridNumber->displayInfos.isVisible || refined) {
                     updateNumber(*gridNumber, dt, mousePos);
                 }
             }
         }
+        updateBins(dt);
     }
 
     void drawNumbersPanel() final
@@ -363,6 +399,12 @@ private:
             group->numberIds.clear();
             group->refined = true;
             bins[best].badGroupsRefined++;
+            bins[best].groupsLanded++;
+        }
+
+        // Bars start already filled to the preset rather than animating up to it
+        for (auto &bin : bins) {
+            bin.shownFraction = bin.landedFraction();
         }
     }
 
@@ -470,6 +512,7 @@ private:
         if (group->isActive && info.hoverScale >= 0.5f + displaySettings.mouseScaleMultiplier && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             group->refined = true;
             activeFile->bins[group->binIdx].badGroupsRefined++;
+            startGroupFlight(*group);
             return;
         }
 
@@ -481,37 +524,89 @@ private:
         }
     }
 
+    Bin& binFor(const BadGroup& group)
+    {
+        return activeFile->bins[std::clamp(group.binIdx, 0, 4)];
+    }
+
+    // Launches one number toward its group's bin from where it's currently drawn, after `delay`
+    void startFlight(Number& number, const BadGroup& group, float delay)
+    {
+        auto &info = number.displayInfos;
+        info.refinedX = info.centerX + info.offsetX;
+        info.refinedY = info.centerY + info.offsetY;
+        info.flightDelay = delay;
+        info.flightProgress = 0.f;
+        info.hoverScale = 1.f;
+
+        // Same average speed as the saved 'Refined to Bin Speed' setting (px per frame at 60fps)
+        const Bin &bin = binFor(group);
+        float distance = std::hypot(bin.opening.x - info.refinedX, bin.opening.y - info.refinedY);
+        float speed = std::max(1.f, displaySettings.refinedToBinSpeed * kReferenceFps);
+        info.flightDuration = std::max(kMinFlightDuration, distance / speed);
+    }
+
+    // Launches a just-refined group's numbers one after another
+    void startGroupFlight(const BadGroup& group)
+    {
+        float delay = 0.f;
+        for (int numberId : group.numberIds) {
+            startFlight(*activeFile->numberGrid->getGridNumber(numberId), group, delay);
+            delay += kFlightStagger;
+        }
+    }
+
     void flyToBin(Number& number, BadGroup& group, float dt)
     {
         auto &info = number.displayInfos;
         if (info.refinedX == -1.f) {
-            info.refinedX = info.centerX;
-            info.refinedY = info.centerY;
+            startFlight(number, group, 0.f);
         }
+        info.hoverScale = 1.f;
 
-        int binIdx = std::clamp(group.binIdx, 0, 4);
-        const Bin &bin = activeFile->bins[binIdx];
-        float distX = bin.pos.x - info.refinedX;
-        float distY = bin.pos.y - info.refinedY;
-        float distance = std::sqrt(distX * distX + distY * distY);
-        float step = displaySettings.refinedToBinSpeed * kReferenceFps * dt;
-
-        if (distance > step) {
-            info.refinedX += distX / distance * step;
-            info.refinedY += distY / distance * step;
-            binReceiving = binIdx;
+        Bin &bin = binFor(group);
+        bin.incoming++;
+        if (info.flightDelay > 0.f) {
+            info.flightDelay -= dt;
+            return;
+        }
+        info.flightProgress += dt / info.flightDuration;
+        if (info.flightProgress < 1.f) {
             return;
         }
 
         // Landed: becomes an ordinary number again. Removing it from the group lets the grid drop
-        // the group once all its numbers are in
+        // the group once all its numbers are in, which is when the bin's bar fills
+        bin.bump = 1.f;
         auto &ids = group.numberIds;
         ids.erase(std::remove(ids.begin(), ids.end(), number.id), ids.end());
+        if (ids.empty()) {
+            bin.groupsLanded++;
+        }
         number.badGroup.reset();
         number.num = std::uniform_int_distribution<int>(0, 9)(rng);
         info.refinedX = -1.f;
         info.refinedY = -1.f;
         startFadeIn(number, 0.f);
+    }
+
+    // Eases each bin's bar, pulse and lid toward their targets
+    void updateBins(float dt)
+    {
+        for (auto &bin : activeFile->bins) {
+            bin.shownFraction += (bin.landedFraction() - bin.shownFraction) * (1.f - std::exp(-kBarFillSmoothing * dt));
+            bin.bump = std::max(0.f, bin.bump - dt / kBinBumpDuration);
+
+            if (bin.incoming > 0) {
+                bin.lidCloseTimer = kLidCloseDelay;
+                bin.lidOpen = std::min(1.f, bin.lidOpen + dt / kLidOpenDuration);
+            } else if (bin.lidCloseTimer > 0.f) {
+                bin.lidCloseTimer -= dt;
+            } else {
+                bin.lidOpen = std::max(0.f, bin.lidOpen - dt / kLidCloseDuration);
+            }
+            bin.incoming = 0; // Recounted by flying numbers next update
+        }
     }
 
     void drawNumbers()
@@ -520,13 +615,24 @@ private:
         for (const auto &[x, gridY] : activeFile->numberGrid->getGrid()) {
             for (const auto &[y, gridNumber] : gridY) {
                 const auto &info = gridNumber->displayInfos;
-                if (!info.isVisible) {
+                const BadGroupPtr &group = gridNumber->badGroup;
+                bool flying = group && group->refined && info.refinedX != -1.f;
+                if (!info.isVisible && !flying) {
                     continue;
                 }
 
-                const BadGroupPtr &group = gridNumber->badGroup;
-                bool flying = group && group->refined && info.refinedX != -1.f;
-                ImVec2 pos = flying ? ImVec2(info.refinedX, info.refinedY) : ImVec2(info.centerX + info.offsetX, info.centerY + info.offsetY);
+                ImVec2 pos(info.centerX + info.offsetX, info.centerY + info.offsetY);
+                float flightScale = 1.f;
+                float flightAlpha = 1.f;
+                if (flying) {
+                    // Ease from the start point to the bin's opening, shrinking and fading as it drops in
+                    float progress = std::clamp(info.flightProgress, 0.f, 1.f);
+                    float eased = easeInOutCubic(progress);
+                    const Bin &bin = binFor(*group);
+                    pos = ImVec2(info.refinedX + (bin.opening.x - info.refinedX) * eased, info.refinedY + (bin.opening.y - info.refinedY) * eased);
+                    flightScale = 1.f - kFlightShrink * smoothstep(kFlightShrinkStart, 1.f, progress);
+                    flightAlpha = 1.f - smoothstep(kFlightFadeStart, 1.f, progress);
+                }
                 float badScale = group ? swellScale(*group) * zoomCueFactor() : 0.f;
 
                 ImVec4 col = ColorValues::lumonBlue.Value;
@@ -534,13 +640,11 @@ private:
                 if (revealMap && group) {
                     col = group->isActive ? ImVec4(1.f, 1.f, 0.f, col.w) : ImVec4(1.f, 0.f, 0.f, 1.f);
                 }
-                if (!flying) {
-                    col.w *= info.edgeAlpha;
-                }
+                col.w *= flying ? flightAlpha : info.edgeAlpha;
 
                 const std::string &imagePath = kNumberImagePaths[gridNumber->num];
                 auto [width, height] = imageDisplay->getImageSize(imagePath);
-                float scale = gridNumber->regenerateScale * displaySettings.imageScale * info.hoverScale * panelScale + badScale;
+                float scale = (gridNumber->regenerateScale * displaySettings.imageScale * info.hoverScale * panelScale + badScale) * flightScale;
                 ImGui::SetCursorPos(ImVec2(pos.x - windowPos.x - width * scale / 2.f, pos.y - windowPos.y - height * scale / 2.f));
                 imageDisplay->drawImGuiImage(imagePath, scale, col);
             }
@@ -619,11 +723,15 @@ private:
             // Scale based on viewport size
             auto pos = b.updatePos(windowSize, windowPos, displayPresets.numberWindowBufferBottom - displayPresets.binOffset);
 
-            // Draw bin images
+            // Draw bin images, pulsing slightly as numbers land
             std::string binPath = "bins/bin0" + std::to_string(b.id) + ".png";
             auto [width, height] = imageDisplay->getImageSize(binPath);
-            ImGui::SetCursorPos(ImVec2(pos.x - windowPos.x - (width*displayPresets.binImageScale/2.f), pos.y - windowPos.y - (height*displayPresets.binImageScale/2.f)));
-            imageDisplay->drawImGuiImage(binPath, displayPresets.binImageScale, ColorValues::lumonBlue);
+            float boxWidth = width * displayPresets.binImageScale;
+            float boxHeight = height * displayPresets.binImageScale;
+            float bumpScale = displayPresets.binImageScale * (1.f + kBinBumpScale * b.bump);
+            ImGui::SetCursorPos(ImVec2(pos.x - windowPos.x - (width*bumpScale/2.f), pos.y - windowPos.y - (height*bumpScale/2.f)));
+            imageDisplay->drawImGuiImage(binPath, bumpScale, ColorValues::lumonBlue);
+            b.opening = ImVec2(pos.x, pos.y - boxHeight / 2.f);
 
             auto percentPos = ImVec2(pos.x, pos.y + displayPresets.binPercentBarOffset);
             ImGui::SetCursorPos(ImVec2(percentPos.x - windowPos.x - (widthP*displayPresets.binImageScale/2.f), percentPos.y - windowPos.y - (heightP*displayPresets.binImageScale/2.f)));
@@ -633,21 +741,35 @@ private:
             ImVec2 trCorner = ImVec2(percentPos.x - (widthP*displayPresets.binImageScale/2.f), percentPos.y - (heightP*displayPresets.binImageScale/2.f));
             ImVec2 brCorner = ImVec2(percentPos.x + (widthP*displayPresets.binImageScale/2.f), percentPos.y + (heightP*displayPresets.binImageScale/2.f));
 
-            double percentD = b.fractionRefined();
-            int percentInt = lround(percentD * 100.f);
-            std::string percentString = std::to_string(percentInt) + "%";
+            // Bar and percentage fill smoothly as each group's numbers finish landing
+            float shown = b.shownFraction;
+            std::string percentString = std::to_string(static_cast<int>(std::lround(shown * 100.f))) + "%";
             drawList->AddText(font, displayPresets.fontSize, ImVec2(trCorner.x + 5.f, (trCorner.y + brCorner.y)/2.f - displayPresets.fontSize/2.f), ColorValues::lumonBlue, percentString.c_str());
 
-            drawList->AddRectFilled(trCorner, ImVec2(trCorner.x + ((brCorner.x - trCorner.x)* percentD), brCorner.y), ImColor(ColorValues::lumonBlue.Value.x, ColorValues::lumonBlue.Value.y, ColorValues::lumonBlue.Value.z, 0.3f));
+            drawList->AddRectFilled(trCorner, ImVec2(trCorner.x + ((brCorner.x - trCorner.x) * shown), brCorner.y), ImColor(ColorValues::lumonBlue.Value.x, ColorValues::lumonBlue.Value.y, ColorValues::lumonBlue.Value.z, 0.3f));
 
-            // Animate bin open
-            if (binReceiving && *binReceiving == b.id - 1) {
-                std::string binOpenPath = "bins/bin-open.png";
-                auto [widthO, heightO] = imageDisplay->getImageSize(binOpenPath);
-                ImGui::SetCursorPos(ImVec2(pos.x - windowPos.x - (widthO*displayPresets.binImageScale/2.f), pos.y - windowPos.y - (heightO*displayPresets.binImageScale/2.f) - (height*displayPresets.binImageScale)));
-                imageDisplay->drawImGuiImage(binOpenPath, displayPresets.binImageScale, ColorValues::lumonBlue);
-            }
+            drawLid(drawList, b, boxWidth);
         }
+    }
+
+    // Two flaps hinged at the box's top corners, swinging up and out from lying flat over the box
+    void drawLid(ImDrawList* drawList, const Bin& bin, float boxWidth)
+    {
+        if (bin.lidOpen <= 0.f) {
+            return;
+        }
+
+        float angle = kLidOpenAngle * smoothstep(0.f, 1.f, bin.lidOpen);
+        float length = boxWidth * kLidLengthFraction;
+        float thickness = kLidThickness * displayPresets.binImageScale;
+        ImVec2 leftHinge(bin.opening.x - boxWidth / 2.f, bin.opening.y);
+        ImVec2 rightHinge(bin.opening.x + boxWidth / 2.f, bin.opening.y);
+
+        // Closed, each flap points inward along the top edge; opening rotates it up and outward
+        ImVec2 leftEnd(leftHinge.x + std::cos(angle) * length, leftHinge.y - std::sin(angle) * length);
+        ImVec2 rightEnd(rightHinge.x - std::cos(angle) * length, rightHinge.y - std::sin(angle) * length);
+        drawList->AddLine(leftHinge, leftEnd, ColorValues::lumonBlue, thickness);
+        drawList->AddLine(rightHinge, rightEnd, ColorValues::lumonBlue, thickness);
     }
 
     void drawGraphicOverlays(const ImVec2& windowPos, const ImVec2& windowSize, ImDrawList* drawList)
@@ -835,6 +957,11 @@ private:
     }
 
     // Helpers
+    bool allGroupsLanded() const
+    {
+        return std::all_of(activeFile->bins.begin(), activeFile->bins.end(), [](const Bin &b) { return b.groupsLanded >= b.maxBadGroups; });
+    }
+
     bool allGroupsRefined() const
     {
         return std::all_of(activeFile->bins.begin(), activeFile->bins.end(), [](const Bin &b) { return b.badGroupsRefined >= b.maxBadGroups; });
@@ -888,9 +1015,6 @@ private:
 
     siv::PerlinNoise perlin{ 555 };
     double noiseTime = 0.0;
-
-    // Bin (0-based) a refined number is currently flying into, which shows its lid open
-    std::optional<int> binReceiving;
 
     // Debug options
     bool revealMap = false;
