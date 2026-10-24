@@ -71,6 +71,11 @@ public:
             return;
         }
 
+        // Finish the open file instantly with 'CTRL+1', for testing the completion screens
+        if (!showingFileComplete && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_1)) {
+            numbersPanel->completeFile();
+        }
+
         checkFileComplete();
         if (showingFileComplete) {
             fileCompleteScreen->update();

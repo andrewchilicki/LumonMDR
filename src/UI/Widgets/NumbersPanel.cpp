@@ -277,6 +277,11 @@ public:
         completionTimer = 0.f;
     }
 
+    void completeFile() final
+    {
+        applyPresetCompletion(*activeFile, 100);
+    }
+
     FileCompletion getFileCompletion() const final
     {
         return fileCompletion;
@@ -359,13 +364,16 @@ private:
     }
 
     // Instantly refines enough random bad groups to reach `percent` overall (rounded up), always
-    // taking from whichever bin is proportionally least full so the bins stay roughly even
+    // taking from whichever bin is proportionally least full so the bins stay roughly even.
+    // Groups already refined (still flying to their bin) are left to land
     void applyPresetCompletion(FileProgress& progress, int percent)
     {
         std::array<std::vector<BadGroupPtr>, 5> unrefined;
         int total = 0;
         for (const auto &[id, group] : progress.numberGrid->getBadGroups()) {
-            unrefined[group->binIdx].push_back(group);
+            if (!group->refined) {
+                unrefined[group->binIdx].push_back(group);
+            }
             total++;
         }
         for (auto &groups : unrefined) {

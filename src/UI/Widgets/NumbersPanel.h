@@ -27,6 +27,10 @@ public:
 
     virtual FileCompletion getFileCompletion() const = 0;
 
+    // Shortcut for testing: instantly refines every remaining group in the open file, so it
+    // completes as soon as any numbers already flying land
+    virtual void completeFile() = 0;
+
     virtual ~NumbersPanel() = default;
 };
 
