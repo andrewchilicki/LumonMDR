@@ -4,6 +4,7 @@
 #include "Widgets/BootScreen.h"
 #include "Widgets/FileCompleteScreen.h"
 #include "Widgets/FileSelectScreen.h"
+#include "Widgets/Files.h"
 #include "Widgets/IdleScreen.h"
 #include "Widgets/NumbersPanel.h"
 
@@ -165,7 +166,18 @@ private:
         }
         showingFileComplete = true;
         idleMode = false;
-        fileCompleteScreen->show(completion == FileCompletion::JustCompleted ? FileCompleteScreen::Kind::FirstCompletion : FileCompleteScreen::Kind::AlreadyComplete);
+        fileCompleteScreen->show(completion == FileCompletion::JustCompleted ? FileCompleteScreen::Kind::FirstCompletion : FileCompleteScreen::Kind::AlreadyComplete,
+                                 openFileHasOutieMessage());
+    }
+
+    bool openFileHasOutieMessage() const
+    {
+        for (const FileInfo& file : kFiles) {
+            if (file.name == fileSelectScreen->getSelectedFile()) {
+                return file.outieMessage;
+            }
+        }
+        return false;
     }
 
     std::shared_ptr<ImageDisplay> imageDisplay;

@@ -1,52 +1,62 @@
 # Introduction
 
-The goal of this project was to create a working miniature desktop display inspired by the 'Macrodata Refinement' computers featured in Apple TV's *Severance*. This build consists of two key aspects: the **software** and the **hardware design**, both outlined below.
+A recreation of the 'Macrodata Refinement' terminal from Apple TV's *Severance*, written in C++17 with Dear ImGui, GLFW and OpenGL 3. It runs on Windows and Linux.
 
-Feel free to email comments, suggestions, or inquiries directly to andrewchilx@gmail.com.
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/aaed01c5-b200-4d43-9d2c-5a4399ba4960" width="98%">
-</p>
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/dc987a56-2a41-4780-ac42-345e78c8344e" width="49%">
-  <img src="https://github.com/user-attachments/assets/f46a447d-42ce-47af-b2ae-17409240cb9f" width="49%">
-</p>
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/15eabc19-85e8-4757-908c-e7565946b3b8" width="49%">
-  <img src="https://github.com/user-attachments/assets/54204491-7dae-41e7-aed4-271cc2c316bf" width="49%">
-</p>
+Based on the original project by Andrew Chilicki (andrewchilx@gmail.com).
 
 ---
+
+# I. The Session
+
+1. **Boot.** Press Enter or click to start. The terminal types out its boot text, then draws the Lumon logo. Enter or a click skips ahead a stage.
+2. **Pick a file.** Type a file name at the `> ` prompt and press Enter. The file wheel spins to it. Enter or a click skips the spin.
+3. **Refine.** Find the bad numbers and click them to send them to the bins.
+4. **Complete.** At 100% the screen cracks open to reveal a video, followed by "I love you!". It then fades back to the logo and the file picker.
+
+Each file keeps its own grid and progress until the app closes. Some files start partly or fully refined. Reopening a completed file shows "File complete".
+
+There may be something waiting for whoever finishes Labrador.
+
+## Controls
+
+| Key | Action |
+|---|---|
+| Enter / click | Start the boot, skip ahead, choose a file |
+| Arrow keys, or the mouse at the grid edges | Scroll the grid |
+| Mouse wheel, `,` / `.` | Zoom |
+| Left click | Refine the hovered group |
+| Esc | Back to the logo and file picker |
+| Tab | Toggle the settings panel |
+| I | Toggle idle mode (Lumon logo screensaver); click to exit |
+| Ctrl+1 | Complete the open file instantly (for testing) |
+| Alt+F4 | Quit |
+
 ---
 
-# I. The Software
+# II. The Software
 
-#### Objectives
-
-  - Generate a randomized **number grid** with grouped 'bad numbers'.  
-  - Animate and style the **interface** to match the aesthetics of the show. 
-
-## a. The Number Grid  
+## a. The Number Grid
 
 ![generation](https://github.com/user-attachments/assets/ba004291-8ea9-4b84-995f-f6229e6b8b41)
 
-> **GENERATE**  
-  - A *N×N* grid is created.  
-  - Each cell is filled with a random integer between 0-9.  
+> **GENERATE**
+  - Each file has its own 30×30 grid, built from a fixed seed so its layout is the same every run.
+  - Each cell is filled with a random integer between 0-9.
 
-> **MAP**  
-  - A Perlin noise map assigns smooth gradient values to the grid.  
-  - This ensures numbers are naturally grouped rather than randomly scattered.  
+> **MAP**
+  - A Perlin noise map assigns smooth gradient values to the grid.
+  - This ensures numbers are naturally grouped rather than randomly scattered.
 
-> **THRESHOLD**  
-  - Each cell's value is compared to a set threshold.  
-  - Values above the threshold are marked as 'bad'/'scary' numbers.  
+> **THRESHOLD**
+  - Each cell's value is compared to a set threshold.
+  - Values above the threshold are marked as 'bad'/'scary' numbers.
 
-> **GROUP**  
-  - 'Bad' numbers are grouped based on proximity to one another.  
-  - At random intervals, a group visible in the viewport will be activated:  
-    - If hovered over, they become 'super active', extending their active time and appearing agitated.  
-    - If clicked, the group is **'refined'**, animating into a pre-determined bin and resetting as no longer 'bad'.  
+> **GROUP**
+  - Neighbouring 'bad' numbers form a group.
+  - Every so often, up to three groups become active. Each one grows, holds, then shrinks back.
+    - Hovering over an active group agitates it and keeps it active for longer.
+    - Clicking an active group **refines** it: its numbers fly into a bin, and the group is no longer 'bad'.
+  - When only two groups are left, they are highlighted, with arrows pointing to any that are off screen.
 
 ## b. The Interface
 
@@ -56,61 +66,52 @@ Feel free to email comments, suggestions, or inquiries directly to andrewchilx@g
   <img src="https://github.com/user-attachments/assets/5d105682-2eb9-4c84-9806-cfafa7e4dd91" width="30%">
 </p>
 
-- A moving Perlin noise map offsets each number (vertically or horizontally).  
-- Activated bad groups expand / contract / jitter.
-- Numbers scale-up based on cursor position.
-- Refined groups animate into bins, with a percent bar keeping track of your progress.  
+- A moving Perlin noise map offsets each number (vertically or horizontally).
+- Numbers swell near the cursor, more so when zoomed in.
+- The grid scrolls and zooms smoothly, and fades out at its borders.
+- Bins open their hinged lids as numbers fly in, fill their bars as each group lands, and update the header percentage.
+- The boot sequence, the Lumon logo and the crack reveal on completion are all drawn procedurally.
+- The UI uses the Rajdhani font (SIL Open Font License; see `assets/Rajdhani-OFL.txt`).
 
 #### Additional Features:
-- The application is cross-compatible, allowing compilation for both Linux and Raspberry Pi (ARM).
-- A *'debug mode'* reveals various settings (which can be saved / loaded from disk as JSON).
-- An *'idle mode'* can be enabled to display the Lumon logo screensaver.
-- The user can navigate the full grid using arrow and zoom keys.
+- The settings panel (Tab) exposes the grid and animation settings, which can be saved / loaded from disk as JSON (`settings.json`).
+- An *'idle mode'* shows the Lumon logo screensaver.
 
 ---
----
 
-# II. Hardware Design
+# III. Building
 
-#### Objectives
+You need CMake 3.10+, a C++17 compiler, GLFW, GLEW, OpenGL, pkg-config and FFmpeg (libavformat, libavcodec, libswscale, libavutil). FFmpeg plays the completion video. Dear ImGui, nlohmann/json and stb are bundled in `external/`.
 
-  - Reconstruct the computer housing from the show as a printable 3D model.
-  - Design the interior to support a RaspberryPi and LCD screen 
+#### Windows (MSYS2 MinGW64)
 
-## Final Design
+```sh
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja \
+          mingw-w64-x86_64-pkgconf mingw-w64-x86_64-glfw mingw-w64-x86_64-glew \
+          mingw-w64-x86_64-ffmpeg
+mkdir build && cd build
+cmake -G Ninja ..
+cmake --build .
+```
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/874d9d46-c7f7-44cd-a9ec-21d55afb4973" width="30%">&nbsp;
-  <img src="https://github.com/user-attachments/assets/67b06a72-48b5-4889-83c1-97fb0fe5fab0" width="30%">&nbsp;
-  <img src="https://github.com/user-attachments/assets/2189913c-6f3b-453f-a94a-37ee4acf72d1" width="30%">
-</p>
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/2b0c8d53-02ca-4402-87ce-a6af0ef87a9b" width="60%">&nbsp;
-  <img src="https://github.com/user-attachments/assets/3c73aa3b-753d-4f1e-9f5e-b81ce0db6a6c" width="30%">
-</p>
+A post-build step copies the MinGW runtime DLLs the exe needs next to `LumonMDR.exe`, so it runs without MSYS2 on the `PATH`.
 
-- The computer’s outer shell was modeled in Blender from the ground up, closely following reference images from the show to capture the original look.
-- The design was then optimized for 3D printing.
-  - The structure was made modular, allowing for easy assembly and disassembly.
-  - Each part includes a flat printing surface, enabling clean prints without the need for supports.
-  - Tolerances were incorporated to ensure a snug fit for all components.
-- Finally, the interior was equipped with an adjustable Raspberry Pi mount.
-  - The mounting bracket can move laterally, and the RPi forward, allowing for fine-tuned alignment of the LCD screen with the front panel.
+#### Linux (Debian/Ubuntu)
 
-## Final Product
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/b8fa5a15-ae32-4bd2-a9c3-7a4a64b0ad40" width="90%">
-</p>
+```sh
+sudo apt install build-essential cmake pkg-config libglfw3-dev libglew-dev \
+                 libavformat-dev libavcodec-dev libswscale-dev libavutil-dev
+mkdir build && cd build
+cmake ..
+cmake --build .
+```
 
-## Build Photos
+#### Running
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/661fbc69-a9db-4aee-9691-d9dad5d3d9fc" width="30%">&nbsp;
-  <img src="https://github.com/user-attachments/assets/be88fc36-a475-4b3f-a740-7af5ddd39ef7" width="30%">&nbsp;
-  <img src="https://github.com/user-attachments/assets/8f4e8245-6b6e-4912-96fd-88ff38a1b87e" width="30%">
-</p>
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/c5e0b223-2800-4896-ac11-5bf557b85046" width="30%">&nbsp;
-  <img src="https://github.com/user-attachments/assets/190788f9-335e-4f94-a391-0c0d07545d1f" width="30%">&nbsp;
-  <img src="https://github.com/user-attachments/assets/9e747680-1f53-4fea-b93f-71308c976430" width="30%">
-</p>
+Run from the repository root, since assets and settings are loaded from relative paths:
+
+```sh
+./build/LumonMDR                       # 1920×1080 window
+./build/LumonMDR --full-screen         # full screen on the primary monitor
+./build/LumonMDR --full-screen --monitor=2
+```

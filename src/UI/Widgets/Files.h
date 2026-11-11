@@ -7,9 +7,10 @@ struct FileInfo
     std::string name;
     int presetPercent = 0;  // Completion (0-100) the file starts at the first time it's opened
     unsigned int seed = 0;  // Grid layout seed; 0 uses a default based on the file's position in kFiles
+    bool outieMessage = false; // Finishing it plays the outie's message easter egg
 };
 
-// Files selectable from the picker, in wheel order: {name, preset %, layout seed}.
+// Files selectable from the picker, in wheel order: {name, preset %, layout seed[, outie message]}.
 // Presets refine whole groups, so each seed is chosen so its layout's group count lands exactly on
 // the preset % (noted as groups left / total). If you change a %, NumbersPanel finds a layout that
 // fits at startup and logs the seed to put here instead
@@ -19,7 +20,7 @@ inline const std::vector<FileInfo> kFiles = {
     {"Dranesville", 100, 508},  // 0/29
     {"Jesup", 100, 509},        // 0/25
     {"Kingsport", 35, 5510},    // 20/31
-    {"Labrador", 50, 511},      // 14/28
+    {"Labrador", 50, 511, true}, // 14/28; plays the outie's message
     {"Le Mars", 100, 512},      // 0/34
     {"Siena", 80, 1008},        // 7/35
     {"Tumwater", 100, 514},     // 0/23

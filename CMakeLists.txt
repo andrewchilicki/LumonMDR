@@ -92,6 +92,8 @@ add_executable(${PROJECT_NAME} src/main.cpp
         src/UI/Widgets/Bin.h
         src/UI/Widgets/FileCompleteScreen.cpp
         src/UI/Widgets/FileCompleteScreen.h
+        src/UI/Widgets/Glitch.cpp
+        src/UI/Widgets/Glitch.h
         src/UI/Widgets/TendrilReveal.cpp
         src/UI/Widgets/TendrilReveal.h
         src/UI/Widgets/Settings.h)
